@@ -5,13 +5,14 @@ namespace DoctrineExtensions\Hierarchical;
 
 interface Node
 {
-    public function __construct($entity);
+    public function __construct($entity, $hm);
 
     public function hasPrevSibling();
     public function hasNextSibling();
     public function hasChildren();
     public function hasParent();
     public function isRoot();
+    public function isLeaf();
 
     public function unwrap();
 
@@ -22,6 +23,9 @@ interface Node
     public function getFirstChild();
     public function getLastChild();
     public function getNumberOfChildren();
+    public function getNumberOfDescendants();
+
+    public function getDescendants($depth = null);
 
     public function delete();
 

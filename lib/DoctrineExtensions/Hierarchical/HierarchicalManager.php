@@ -21,14 +21,21 @@ class HierarchicalManager
         $this->em = $em;
     }
 
+    public function getEntityManager()
+    {
+        return $this->em;
+    }
+
     public function getNode($entity)
     {
-        if ($entity instanceof AdjacencyListNodeInfo) {
-            return new AdjacencyListDecorator($entity);
+        // Not yet implemented
+        /*if ($entity instanceof AdjacencyListNodeInfo) {
+            return new AdjacencyListDecorator($entity, $this);
         } else if ($entity instanceof MaterializedPathNodeInfo) {
-            return new MaterializedPathDecorator($entity);
-        } else if ($entity instanceof NestedSetNodeInfo) {
-            return new NestedSetDecorator($entity);
+            return new MaterializedPathDecorator($entity, $this);
+        } else */
+        if ($entity instanceof NestedSetNodeInfo) {
+            return new NestedSetDecorator($entity, $this);
         }
 
         throw new HierarchicalException(
