@@ -39,15 +39,19 @@ class HierarchicalManager
         }
 
         throw new HierarchicalException(
-            'Provided entity does not implement any of the Hierarchical algorithms available. ' . 
-            'Are you sure ' . get_class($entity) . ' implements either ' . 
+            'Provided entity does not implement any of the Hierarchical algorithms available. ' .
+            'Are you sure ' . get_class($entity) . ' implements either ' .
             'AdjacencyListNodeInfo, MaterializedPathNodeInfo or NestedSetNodeInfo?'
         );
     }
 
     public function createRoot($entity)
     {
-        // ...
+        if (!$entity instanceof Node) {
+            $entity = $this->getNode($entity);
+        }
+        $entity->createRoot();
+        return $entity;
     }
 
     // ...

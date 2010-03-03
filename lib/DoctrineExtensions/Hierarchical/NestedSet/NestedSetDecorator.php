@@ -14,6 +14,8 @@ use DoctrineExtensions\Hierarchical\AbstractDecorator,
  *
  * TODO: Should we really use an exception as a normal and expected flow?
  * This happens when we expect a single result (like getPrevSibling, getFirstChild, etc)
+ *
+ * TODO: Isn't there a way to make this thing act as the entity it decorates? so it's easier to pass it along to the EM
  */
 class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNodeInfo
 {
@@ -78,7 +80,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         $q = $em->createQuery('
             SELECT e FROM ' . $this->className . ' e
              WHERE e.root = ?1
-               AND e.left = ?2
+               AND e.lft = ?2
         ')->setParameters(array(
             1 => $this->entity->getRoot(),
             2 => $this->entity->getRightValue() + 1
@@ -107,7 +109,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.rgt < ?3
                AND e.level = ?4
         ')->setParameters(array(
-            1 => $this->entity->getRoot()),
+            1 => $this->entity->getRoot(),
             2 => $this->entity->getLeftValue(),
             3 => $this->entity->getRightValue(),
             4 => $this->entity->getLevel() + 1
@@ -134,7 +136,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.rgt > ?3
                AND e.level = ?4
         ')->setParameters(array(
-            1 => $this->entity->getRoot()),
+            1 => $this->entity->getRoot(),
             2 => $this->entity->getLeftValue(),
             3 => $this->entity->getRightValue(),
             4 => $this->entity->getLevel() - 1
@@ -149,6 +151,11 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         }
 
         return null;
+    }
+
+    public function setParent($value)
+    {
+        // ...
     }
 
     public function getFirstChild()
@@ -219,6 +226,15 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function addChild(Node $node)
     {
+    }
+
+    public function createRoot()
+    {
+        $this->entity->setLevel(0);
+        $this->entity->setRoot(0);
+        $this->entity->setLeftValue(1);
+        $this->entity->setRightValue(2);
+        $this->entity->setParent(0);
     }
 
     public function insertAsLastChildOf(Node $node)

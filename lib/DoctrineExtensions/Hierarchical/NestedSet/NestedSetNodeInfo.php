@@ -2,7 +2,6 @@
 
 namespace DoctrineExtensions\Hierarchical\NestedSet;
 
-
 interface NestedSetNodeInfo
 {
     public function getLeftValue();
@@ -16,4 +15,6 @@ interface NestedSetNodeInfo
 
     public function getRoot();
     public function setRoot($value);
+
+    public function setParent($value);
 }

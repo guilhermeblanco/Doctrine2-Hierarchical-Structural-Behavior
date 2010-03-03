@@ -30,6 +30,7 @@ interface Node
     public function delete();
 
     public function addChild(Node $node);
+    public function createRoot();
 
     public function insertAsLastChildOf(Node $node);
     public function insertAsFirstChildOf(Node $node);
