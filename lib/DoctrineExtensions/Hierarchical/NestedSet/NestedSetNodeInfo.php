@@ -15,6 +15,4 @@ interface NestedSetNodeInfo
 
     public function getRoot();
     public function setRoot($value);
-
-    public function setParent($value);
 }

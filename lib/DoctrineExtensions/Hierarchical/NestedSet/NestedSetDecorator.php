@@ -7,11 +7,6 @@ use DoctrineExtensions\Hierarchical\AbstractDecorator,
     Doctrine\ORM\Query\NoResultException;
 
 /**
- * TODO: "root", "lft", "rgt" and "level" cannot be hardcoded!
- * Maybe using the ClassMetadata this can be possible:
- *
- *     $class = $em->getClassMetadata($this->className);
- *
  * TODO: Should we really use an exception as a normal and expected flow?
  * This happens when we expect a single result (like getPrevSibling, getFirstChild, etc)
  *
@@ -31,12 +26,12 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function hasChildren()
     {
-        return ($this->entity->getRightValue() - $this->entity->getLeftValue()) > 1;
+        return ($this->getRightValue() - $this->getLeftValue()) > 1;
     }
 
     public function hasParent()
     {
-        return $this->entity->getLevel() != 0;
+        return $this->getLevel() != 0;
     }
 
     public function isRoot()
@@ -51,21 +46,22 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getPrevSibling()
     {
-        $em = $this->hm->getEntityManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
 
         $q = $em->createQuery('
-            SELECT e FROM ' . $this->className . ' e
-             WHERE e.root = ?1
-               AND e.rgt = ?2
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' = ?1
+               AND e.' . $config->getRightFieldName() . ' = ?2
         ')->setParameters(array(
-            1 => $this->entity->getRoot(),
-            2 => $this->entity->getLeftValue() - 1
+            1 => $this->getRoot(),
+            2 => $this->getLeftValue() - 1
         ));
 
         try {
             $sibling = $q->getSingleResult();
 
-            return $this->hm->getNode($sibling);
+            return $this->getNode($sibling);
         } catch (NoResultException $e) {
             // Do nothing
         }
@@ -75,21 +71,22 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getNextSibling()
     {
-        $em = $this->hm->getEntityManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
 
         $q = $em->createQuery('
-            SELECT e FROM ' . $this->className . ' e
-             WHERE e.root = ?1
-               AND e.lft = ?2
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' = ?1
+               AND e.' . $config->getLeftFieldName() . ' = ?2
         ')->setParameters(array(
-            1 => $this->entity->getRoot(),
-            2 => $this->entity->getRightValue() + 1
+            1 => $this->getRoot(),
+            2 => $this->getRightValue() + 1
         ));
 
         try {
             $sibling = $q->getSingleResult();
 
-            return $this->hm->getNode($sibling);
+            return $this->getNode($sibling);
         } catch (NoResultException $e) {
             // Do nothing
         }
@@ -99,20 +96,21 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getChildren()
     {
-        $hm = $this->hm;
-        $em = $hm->getEntityManager();
+        $hm = $this->getHierarchicalManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
 
         $q = $em->createQuery('
-            SELECT e FROM ' . $this->className . ' e
-             WHERE e.root = ?1
-               AND e.lft > ?2
-               AND e.rgt < ?3
-               AND e.level = ?4
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' = ?1
+               AND e.' . $config->getLeftFieldName() . ' > ?2
+               AND e.' . $config->getRightFieldName() . ' < ?3
+               AND e.' . $config->getLevelFieldName() . ' = ?4
         ')->setParameters(array(
-            1 => $this->entity->getRoot(),
-            2 => $this->entity->getLeftValue(),
-            3 => $this->entity->getRightValue(),
-            4 => $this->entity->getLevel() + 1
+            1 => $this->getRoot(),
+            2 => $this->getLeftValue(),
+            3 => $this->getRightValue(),
+            4 => $this->getLevel() + 1
         ));
 
         $children = $q->getResult();
@@ -127,25 +125,26 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getParent()
     {
-        $em = $this->hm->getEntityManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
 
         $q = $em->createQuery('
-            SELECT e FROM ' . $this->className . ' e
-             WHERE e.root = ?1
-               AND e.lft < ?2
-               AND e.rgt > ?3
-               AND e.level = ?4
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' = ?1
+               AND e.' . $config->getLeftFieldName() . ' < ?2
+               AND e.' . $config->getRightFieldName() . ' > ?3
+               AND e.' . $config->getLevelFieldName() . ' = ?4
         ')->setParameters(array(
-            1 => $this->entity->getRoot(),
-            2 => $this->entity->getLeftValue(),
-            3 => $this->entity->getRightValue(),
-            4 => $this->entity->getLevel() - 1
+            1 => $this->getRoot(),
+            2 => $this->getLeftValue(),
+            3 => $this->getRightValue(),
+            4 => $this->getLevel() - 1
         ));
 
         try {
             $sibling = $q->getSingleResult();
 
-            return $this->hm->getNode($sibling);
+            return $this->getNode($sibling);
         } catch (NoResultException $e) {
             // Do nothing
         }
@@ -153,28 +152,24 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return null;
     }
 
-    public function setParent($value)
-    {
-        // ...
-    }
-
     public function getFirstChild()
     {
-        $em = $this->hm->getEntityManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
 
         $q = $em->createQuery('
-            SELECT e FROM ' . $this->className . ' e
-             WHERE e.root = ?1
-               AND e.lft = ?2
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' = ?1
+               AND e.' . $config->getLeftFieldName() . ' = ?2
         ')->setParameters(array(
-            1 => $this->entity->getRoot(),
-            2 => $this->entity->getLeftValue() + 1
+            1 => $this->getRoot(),
+            2 => $this->getLeftValue() + 1
         ));
 
         try {
             $sibling = $q->getSingleResult();
 
-            return $this->hm->getNode($sibling);
+            return $this->getNode($sibling);
         } catch (NoResultException $e) {
             // Do nothing
         }
@@ -184,21 +179,22 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getLastChild()
     {
-        $em = $this->hm->getEntityManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
 
         $q = $em->createQuery('
-            SELECT e FROM ' . $this->className . ' e
-             WHERE e.root = ?1
-               AND e.rgt = ?2
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' = ?1
+               AND e.' . $config->getRightFieldName() . ' = ?2
         ')->setParameters(array(
-            1 => $this->entity->getRoot(),
-            2 => $this->entity->getRightValue() - 1
+            1 => $this->getRoot(),
+            2 => $this->getRightValue() - 1
         ));
 
         try {
             $sibling = $q->getSingleResult();
 
-            return $this->hm->getNode($sibling);
+            return $this->getNode($sibling);
         } catch (NoResultException $e) {
             // Do nothing
         }
@@ -213,7 +209,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getNumberOfDescendants()
     {
-        return ($this->entity->getRightValue() - $this->entity->getLeftValue() - 1) / 2;
+        return ($this->getRightValue() - $this->getLeftValue() - 1) / 2;
     }
 
     public function getDescendants($depth = null)
@@ -230,11 +226,15 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function createRoot()
     {
-        $this->entity->setLevel(0);
-        $this->entity->setRoot(0);
-        $this->entity->setLeftValue(1);
-        $this->entity->setRightValue(2);
-        $this->entity->setParent(0);
+        $entity = $this->unwrap();
+
+        $entity->setLevel(0);
+        $entity->setRoot(0);
+        $entity->setLeftValue(1);
+        $entity->setRightValue(2);
+        $entity->setParent(0);
+
+        $this->getEntityManager()->persist($entity);
     }
 
     public function insertAsLastChildOf(Node $node)
@@ -273,41 +273,41 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getLeftValue()
     {
-        return $this->entity->getLeftValue();
+        return $this->unwrap()->getLeftValue();
     }
 
     public function setLeftValue($value)
     {
-        $this->entity->setLeftValue($value);
+        $this->unwrap()->setLeftValue($value);
     }
 
     public function getRightValue()
     {
-        return $this->entity->getRightValue();
+        return $this->unwrap()->getRightValue();
     }
 
     public function setRightValue($value)
     {
-        $this->entity->setRightValue($value);
+        $this->unwrap()->setRightValue($value);
     }
 
     public function getLevel()
     {
-        return $this->entity->getLevel();
+        return $this->unwrap()->getLevel();
     }
 
     public function setLevel($value)
     {
-        $this->entity->setLevel($value);
+        $this->unwrap()->setLevel($value);
     }
 
     public function getRoot()
     {
-        return $this->entity->getRoot();
+        return $this->unwrap()->getRoot();
     }
 
     public function setRoot($value)
     {
-        $this->entity->setRoot($value);
+        $this->unwrap()->setRoot($value);
     }
 }

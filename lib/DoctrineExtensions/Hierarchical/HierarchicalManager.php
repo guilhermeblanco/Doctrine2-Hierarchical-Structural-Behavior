@@ -14,16 +14,33 @@ use DoctrineExtensions\Hierarchical\AdjacencyList\AdjacencyListNodeInfo,
 
 class HierarchicalManager
 {
-    private $em;
+    private $_em;
+
+    private $_classConfiguration;
 
     public function __construct(EntityManager $em)
     {
-        $this->em = $em;
+        $this->_em = $em;
+        $this->_classConfiguration = array();
     }
 
     public function getEntityManager()
     {
-        return $this->em;
+        return $this->_em;
+    }
+
+    public function addClassConfiguration($className, Configuration $configuration)
+    {
+        $this->_classConfiguration[$className] = $configuration;
+    }
+
+    public function getClassConfiguration($className)
+    {
+        if ( ! isset($this->_classConfiguration[$className])) {
+            throw HierarchicalException::couldNotFindClassConfiguration($className);
+        }
+
+        return $this->_classConfiguration[$className];
     }
 
     public function getNode($entity)
@@ -47,10 +64,12 @@ class HierarchicalManager
 
     public function createRoot($entity)
     {
-        if (!$entity instanceof Node) {
+        if ( ! $entity instanceof Node) {
             $entity = $this->getNode($entity);
         }
+
         $entity->createRoot();
+
         return $entity;
     }
 
