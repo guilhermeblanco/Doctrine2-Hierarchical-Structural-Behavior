@@ -44,6 +44,26 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return ! $this->hasChildren();
     }
 
+    public function getRootNodes()
+    {
+        $hm = $this->getHierarchicalManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
+
+        $q = $em->createQuery('
+            SELECT e FROM ' . $this->getClassName() . ' e
+             WHERE e.' . $config->getRootFieldName() . ' IS NULL
+        ');
+        $roots = $q->getResult();
+
+        // Return instance of ArrayCollection instead of PersistentCollection
+        return $roots->unwrap()->map(
+            function ($root) use ($hm) {
+                return $hm->getNode($root);
+            }
+        );
+    }
+
     public function getPrevSibling()
     {
         $em = $this->getEntityManager();
@@ -96,31 +116,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getChildren()
     {
-        $hm = $this->getHierarchicalManager();
-        $em = $this->getEntityManager();
-        $config = $this->getConfiguration();
-
-        $q = $em->createQuery('
-            SELECT e FROM ' . $this->getClassName() . ' e
-             WHERE e.' . $config->getRootFieldName() . ' = ?1
-               AND e.' . $config->getLeftFieldName() . ' > ?2
-               AND e.' . $config->getRightFieldName() . ' < ?3
-               AND e.' . $config->getLevelFieldName() . ' = ?4
-        ')->setParameters(array(
-            1 => $this->getRoot(),
-            2 => $this->getLeftValue(),
-            3 => $this->getRightValue(),
-            4 => $this->getLevel() + 1
-        ));
-
-        $children = $q->getResult();
-
-        // Return instance of ArrayCollection instead of PersistentCollection
-        return $children->unwrap()->map(
-            function ($child) use ($hm) {
-                return $hm->getNode($child);
-            }
-        );
+        return $this->getDescendants(1);
     }
 
     public function getParent()
@@ -212,8 +208,82 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return ($this->getRightValue() - $this->getLeftValue() - 1) / 2;
     }
 
+    public function getAncestors($depth = null)
+    {
+        $hm = $this->getHierarchicalManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
+
+        $qb = $em->createQueryBuilder()
+            ->select('e')
+            ->from($this->getClassName(), 'e');
+
+        $expr = $qb->expr();
+        $andX = $expr->andX()
+            ->add($expr->eq('e.' . $config->getRootFieldName(), '?1'))
+            ->add($expr->lt('e.' . $config->getLeftFieldName(), '?2'))
+            ->add($expr->gt('e.' . $config->getRightFieldName(), '?3'));
+
+        $qb->setParameters(array(
+            1 => $this->getRoot(),
+            2 => $this->getLeftValue(),
+            3 => $this->getRightValue()
+        ));
+
+        if ($depth !== null && $depth > 0) {
+            $andX->add($expr->lte('e.' . $config->getLevelFieldName(), '?4'));
+            $qb->setParameter(4, $this->getLevel() - $depth);
+        }
+
+        $qb->where($andX);
+
+        $ancestors = $qb->getQuery()->getResult();
+
+        // Return instance of ArrayCollection instead of PersistentCollection
+        return $ancestors->unwrap()->map(
+            function ($ancestor) use ($hm) {
+                return $hm->getNode($ancestor);
+            }
+        );
+    }
+
     public function getDescendants($depth = null)
     {
+        $hm = $this->getHierarchicalManager();
+        $em = $this->getEntityManager();
+        $config = $this->getConfiguration();
+
+        $qb = $em->createQueryBuilder()
+            ->select('e')
+            ->from($this->getClassName(), 'e');
+
+        $expr = $qb->expr();
+        $andX = $expr->andX()
+            ->add($expr->eq('e.' . $config->getRootFieldName(), '?1'))
+            ->add($expr->gt('e.' . $config->getLeftFieldName(), '?2'))
+            ->add($expr->lt('e.' . $config->getRightFieldName(), '?3'));
+
+        $qb->setParameters(array(
+            1 => $this->getRoot(),
+            2 => $this->getLeftValue(),
+            3 => $this->getRightValue()
+        ));
+
+        if ($depth !== null && $depth > 0) {
+            $andX->add($expr->lte('e.' . $config->getLevelFieldName(), '?4'));
+            $qb->setParameter(4, $this->getLevel() + $depth);
+        }
+
+        $qb->where($andX);
+
+        $descendants = $qb->getQuery()->getResult();
+
+        // Return instance of ArrayCollection instead of PersistentCollection
+        return $descendantds->unwrap()->map(
+            function ($descendant) use ($hm) {
+                return $hm->getNode($descendant);
+            }
+        );
     }
 
     public function delete()
@@ -229,20 +299,65 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         $entity = $this->unwrap();
 
         $entity->setLevel(0);
-        $entity->setRoot(0);
+        $entity->setRoot(null);
         $entity->setLeftValue(1);
         $entity->setRightValue(2);
-        $entity->setParent(0);
 
         $this->getEntityManager()->persist($entity);
     }
 
     public function insertAsLastChildOf(Node $node)
     {
+        $em = $this->getEntityManager();
+
+        // Update the current node
+        $this->setLevel($node->getLevel() + 1);
+        $this->setRoot($node->getRoot());
+        $this->setLeftValue($node->getRight());
+        $this->setRightValue($node->getRight() + 1);
+
+        $em->persist($this->unwrap());
+
+        // Retrieving ancestors
+        $ancestors = $node->getAncestors();
+
+        // Updating parent node
+        $node->setRightValue($node->getRightValue() + 2);
+
+        $em->persist($node->unwrap());
+
+        // Updating ancestors
+        foreach ($ancestors as $ancestor) {
+            $ancestor->setRightValue($ancestor->getRightValue() + 2);
+            $em->persist($ancestor->unwrap());
+        }
     }
 
     public function insertAsFirstChildOf(Node $node)
     {
+        $em = $this->getEntityManager();
+
+        // Update the current node
+        $this->setLevel($node->getLevel() + 1);
+        $this->setRoot($node->getRoot());
+        $this->setLeftValue($node->getLeft() - 1);
+        $this->setRightValue($node->getLeft());
+
+        $em->persist($this->unwrap());
+
+        // Retrieving ancestors
+        $ancestors = $node->getAncestors();
+
+        // Updating parent node
+        $node->setLeftValue($node->getLeftValue() - 2);
+
+        $em->persist($node->unwrap());
+
+        // Updating ancestors
+        foreach ($ancestors as $ancestor) {
+            $ancestor->setLeftValue($ancestor->getLeftValue() - 2);
+            $em->persist($ancestor->unwrap());
+        }
     }
 
     public function insertAsNextSiblingOf(Node $node)

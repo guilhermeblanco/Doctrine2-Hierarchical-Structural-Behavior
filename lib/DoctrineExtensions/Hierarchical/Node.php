@@ -16,6 +16,7 @@ interface Node
 
     public function unwrap();
 
+    public function getRootNodes();
     public function getPrevSibling();
     public function getNextSibling();
     public function getChildren();
@@ -25,6 +26,7 @@ interface Node
     public function getNumberOfChildren();
     public function getNumberOfDescendants();
 
+    public function getAncestors($depth = null);
     public function getDescendants($depth = null);
 
     public function delete();
