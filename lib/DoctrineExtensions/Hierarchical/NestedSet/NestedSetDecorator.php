@@ -4,6 +4,7 @@ namespace DoctrineExtensions\Hierarchical\NestedSet;
 
 use DoctrineExtensions\Hierarchical\AbstractDecorator,
     DoctrineExtensions\Hierarchical\Node,
+    DoctrineExtensions\Hierarchical\HierarchicalException,
     Doctrine\ORM\Query\NoResultException;
 
 /**
@@ -297,6 +298,10 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
     public function createRoot()
     {
         $entity = $this->unwrap();
+
+        if ($entity->getRoot() !== null) {
+            throw new HierarchicalException('This entity is already initialized and can not be made a root node');
+        }
 
         $entity->setLevel(0);
         $entity->setRoot(null);
