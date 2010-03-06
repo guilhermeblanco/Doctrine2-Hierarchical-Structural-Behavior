@@ -4,6 +4,8 @@ namespace DoctrineExtensions\Hierarchical\NestedSet;
 
 interface NestedSetNodeInfo
 {
+    public function getId();
+
     public function getLeftValue();
     public function setLeftValue($value);
 

@@ -12,6 +12,12 @@ use DoctrineExtensions\Hierarchical\AbstractDecorator,
  * This happens when we expect a single result (like getPrevSibling, getFirstChild, etc)
  *
  * TODO: Isn't there a way to make this thing act as the entity it decorates? so it's easier to pass it along to the EM
+ *
+ * TODO: Can't we rename getLeft/RightValue to getLeft/Right for consistency with the other accessors ?
+ *
+ * TODO: Why do we call unwrap() in every second method rather than just accessing $this->_entity,
+ * which btw should be called $this->entity imo, it's protected I don't see the point of the _, but
+ * that might be doctrine policy..
  */
 class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNodeInfo
 {
@@ -48,21 +54,14 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
     public function getRootNodes()
     {
         $hm = $this->getHierarchicalManager();
-        $em = $this->getEntityManager();
+        $em = $hm->getEntityManager();
         $config = $this->getConfiguration();
 
         $q = $em->createQuery('
             SELECT e FROM ' . $this->getClassName() . ' e
              WHERE e.' . $config->getRootFieldName() . ' IS NULL
         ');
-        $roots = $q->getResult();
-
-        // Return instance of ArrayCollection instead of PersistentCollection
-        return $roots->unwrap()->map(
-            function ($root) use ($hm) {
-                return $hm->getNode($root);
-            }
-        );
+        return $q->getResult();
     }
 
     public function getPrevSibling()
@@ -212,7 +211,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
     public function getAncestors($depth = null)
     {
         $hm = $this->getHierarchicalManager();
-        $em = $this->getEntityManager();
+        $em = $hm->getEntityManager();
         $config = $this->getConfiguration();
 
         $qb = $em->createQueryBuilder()
@@ -238,20 +237,18 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb->where($andX);
 
-        $ancestors = $qb->getQuery()->getResult();
-
-        // Return instance of ArrayCollection instead of PersistentCollection
-        return $ancestors->unwrap()->map(
-            function ($ancestor) use ($hm) {
-                return $hm->getNode($ancestor);
-            }
-        );
+        return $qb->getQuery()->getResult();
     }
 
     public function getDescendants($depth = null)
     {
+        $entity = $this->unwrap();
+        if ( ! $this->hasChildren()) {
+            return array();
+        }
+
         $hm = $this->getHierarchicalManager();
-        $em = $this->getEntityManager();
+        $em = $hm->getEntityManager();
         $config = $this->getConfiguration();
 
         $qb = $em->createQueryBuilder()
@@ -277,14 +274,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb->where($andX);
 
-        $descendants = $qb->getQuery()->getResult();
-
-        // Return instance of ArrayCollection instead of PersistentCollection
-        return $descendantds->unwrap()->map(
-            function ($descendant) use ($hm) {
-                return $hm->getNode($descendant);
-            }
-        );
+        return $qb->getQuery()->getResult();
     }
 
     public function delete()
@@ -313,7 +303,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function insertAsLastChildOf(Node $node)
     {
-        $em = $this->getEntityManager();
+        $hm = $this->getHierarchicalManager();
+        $em = $hm->getEntityManager();
 
         // Update the current node
         $this->setLevel($node->getLevel() + 1);
@@ -324,7 +315,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         $em->persist($this->unwrap());
 
         // Retrieving ancestors
-        $ancestors = $node->getAncestors();
+        $ancestors = $hm->getNodes($node->getAncestors());
 
         // Updating parent node
         $node->setRightValue($node->getRightValue() + 2);
@@ -340,7 +331,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function insertAsFirstChildOf(Node $node)
     {
-        $em = $this->getEntityManager();
+        $hm = $this->getHierarchicalManager();
+        $em = $hm->getEntityManager();
 
         // Update the current node
         $this->setLevel($node->getLevel() + 1);
@@ -351,7 +343,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         $em->persist($this->unwrap());
 
         // Retrieving ancestors
-        $ancestors = $node->getAncestors();
+        $ancestors = $hm->getNodes($node->getAncestors());
 
         // Updating parent node
         $node->setLeftValue($node->getLeftValue() - 2);
@@ -391,6 +383,11 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     // Delegate support for Decorator object
 
+    public function getId()
+    {
+        return $this->unwrap()->getId();
+    }
+
     public function getLeftValue()
     {
         return $this->unwrap()->getLeftValue();
@@ -423,7 +420,10 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getRoot()
     {
-        return $this->unwrap()->getRoot();
+        if ($this->hasParent()) {
+            return $this->unwrap()->getRoot();
+        }
+        return $this->getId();
     }
 
     public function setRoot($value)

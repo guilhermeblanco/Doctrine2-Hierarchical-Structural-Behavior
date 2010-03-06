@@ -5,27 +5,27 @@ namespace DoctrineExtensions\Hierarchical\NestedSet;
 /**
  * TODO: Document this class (it's already finished!)
  */
-class NestedSetConfiguration extends DoctrineExtensions\Hierarchical\Configuration
+class NestedSetConfiguration extends \DoctrineExtensions\Hierarchical\Configuration
 {
     /**
      * @var string Left field name
      */
-    private $_leftFieldName;
+    protected $_leftFieldName = 'lft';
 
     /**
      * @var string Right field name
      */
-    private $_rightFieldName;
+    protected $_rightFieldName = 'rgt';
 
     /**
      * @var string Root field name
      */
-    private $_rootFieldName;
+    protected $_rootFieldName = 'root';
 
     /**
      * @var string Level field name
      */
-    private $_levelFieldName;
+    protected $_levelFieldName = 'level';
 
     public function setLeftFieldName($fieldName)
     {
