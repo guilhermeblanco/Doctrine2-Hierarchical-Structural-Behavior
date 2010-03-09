@@ -273,10 +273,10 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
             ->from($this->getClassName(), 'e');
 
         $expr = $qb->expr();
-        $andX = $expr->andX()
-            ->add($expr->eq('e.' . $config->getRootFieldName(), '?1'))
-            ->add($expr->gt('e.' . $config->getLeftFieldName(), '?2'))
-            ->add($expr->lt('e.' . $config->getRightFieldName(), '?3'));
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $config->getRootFieldName(), '?1'));
+        $andX->add($expr->gt('e.' . $config->getLeftFieldName(), '?2'));
+        $andX->add($expr->lt('e.' . $config->getRightFieldName(), '?3'));
 
         $qb->setParameters(array(
             1 => $this->getRoot(),
