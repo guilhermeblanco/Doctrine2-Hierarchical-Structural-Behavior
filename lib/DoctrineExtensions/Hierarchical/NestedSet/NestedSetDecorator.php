@@ -51,7 +51,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return ! $this->hasChildren();
     }
 
-    public function getRootNodes()
+    public function getRootNodes($limit = null, $offset = 0)
     {
         $hm = $this->getHierarchicalManager();
         $em = $hm->getEntityManager();
@@ -61,6 +61,14 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
             SELECT e FROM ' . $this->getClassName() . ' e
              WHERE e.' . $config->getRootFieldName() . ' IS NULL
         ');
+
+        if ($limit !== null) {
+            $q->setMaxResults((int) $limit);
+        }
+        if ($offset) {
+            $q->setFirstResult((int) $offset);
+        }
+
         return $q->getResult();
     }
 
@@ -114,9 +122,9 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return null;
     }
 
-    public function getChildren()
+    public function getChildren($limit = null, $offset = 0, $order = 'ASC')
     {
-        return $this->getDescendants(1);
+        return $this->getDescendants(1, $limit, $offset, $order);
     }
 
     public function getParent()
@@ -208,7 +216,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return ($this->getRightValue() - $this->getLeftValue() - 1) / 2;
     }
 
-    public function getAncestors($depth = null)
+    public function getAncestors($depth = null, $limit = null, $offset = 0, $order = 'ASC')
     {
         $hm = $this->getHierarchicalManager();
         $em = $hm->getEntityManager();
@@ -236,11 +244,20 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         }
 
         $qb->where($andX);
+        $qb->orderBy($config->getLeftFieldName(), $order);
 
-        return $qb->getQuery()->getResult();
+        $q = $qb->getQuery();
+        if ($limit !== null) {
+            $q->setMaxResults((int) $limit);
+        }
+        if ($offset) {
+            $q->setFirstResult((int) $offset);
+        }
+
+        return $q->getResult();
     }
 
-    public function getDescendants($depth = null)
+    public function getDescendants($depth = null, $limit = null, $offset = 0, $order = 'ASC')
     {
         $entity = $this->unwrap();
         if ( ! $this->hasChildren()) {
@@ -273,8 +290,17 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         }
 
         $qb->where($andX);
+        $qb->orderBy('e.' . $config->getLeftFieldName(), $order);
 
-        return $qb->getQuery()->getResult();
+        $q = $qb->getQuery();
+        if ($limit !== null) {
+            $q->setMaxResults((int) $limit);
+        }
+        if ($offset) {
+            $q->setFirstResult((int) $offset);
+        }
+
+        return $q->getResult();
     }
 
     public function delete()
