@@ -73,7 +73,7 @@ class HierarchicalManager
                     return $hm->getNode($node);
                 }
             );
-        } elseif (is_array($descendants) || $descendants instanceof Traversable) {
+        } elseif (is_array($input) || $input instanceof Traversable) {
             foreach ($input as $key => $entity) {
                 $input[$key] = $this->getNode($entity);
             }
