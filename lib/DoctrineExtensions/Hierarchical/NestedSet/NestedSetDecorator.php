@@ -354,8 +354,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         // Update the current node
         $this->setLevel($node->getLevel() + 1);
         $this->setRoot($node->getRoot());
-        $this->setLeftValue($node->getRight());
-        $this->setRightValue($node->getRight() + 1);
+        $this->setLeftValue($node->getRightValue());
+        $this->setRightValue($node->getRightValue() + 1);
 
         $em->persist($this->unwrap());
 
@@ -382,8 +382,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         // Update the current node
         $this->setLevel($node->getLevel() + 1);
         $this->setRoot($node->getRoot());
-        $this->setLeftValue($node->getLeft() - 1);
-        $this->setRightValue($node->getLeft());
+        $this->setLeftValue($node->getLeftValue() - 1);
+        $this->setRightValue($node->getLeftValue());
 
         $em->persist($this->unwrap());
 
