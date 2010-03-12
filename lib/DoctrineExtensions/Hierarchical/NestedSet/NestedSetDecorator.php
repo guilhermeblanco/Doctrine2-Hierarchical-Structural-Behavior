@@ -8,16 +8,26 @@ use DoctrineExtensions\Hierarchical\AbstractDecorator,
     Doctrine\ORM\Query\NoResultException;
 
 /**
- * TODO: Should we really use an exception as a normal and expected flow?
- * This happens when we expect a single result (like getPrevSibling, getFirstChild, etc)
- *
  * TODO: Isn't there a way to make this thing act as the entity it decorates? so it's easier to pass it along to the EM
- *
- * TODO: Can't we rename getLeft/RightValue to getLeft/Right for consistency with the other accessors ?
+ * I don't know a clean ay to achieve it
  *
  * TODO: Why do we call unwrap() in every second method rather than just accessing $this->_entity,
  * which btw should be called $this->entity imo, it's protected I don't see the point of the _, but
  * that might be doctrine policy..
+ * The _entity definition is part of Doctrine Coding Standards
+ *
+ * TODO: We'll move all Interfaces (NestedSetNodeInfo, AdjacencyListNodeInfo, MaterializedPathNodeInfo) to implement new
+ * methods to make Entities more self contained. I'll implement the same approach as I did with Sluggable implementation
+ * that I will release today/tomorrow. This will also allow to remove the Configuration concept I introduced previously.
+ * Draft of the new class:
+ *
+ * class NestedSetNodeInfo {
+ *     public function getIdFieldName();
+ *     public function getLeftFieldName();
+ *     public function getRightFieldName();
+ *     public function getLevelFieldName();
+ *     public function getRootFieldName();
+ * }
  */
 class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNodeInfo
 {
@@ -33,7 +43,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function hasChildren()
     {
-        return ($this->getRightValue() - $this->getLeftValue()) > 1;
+        return ($this->getRight() - $this->getLeft()) > 1;
     }
 
     public function hasParent()
@@ -83,7 +93,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.' . $config->getRightFieldName() . ' = ?2
         ')->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getLeftValue() - 1
+            2 => $this->getLeft() - 1
         ));
 
         try {
@@ -108,7 +118,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.' . $config->getLeftFieldName() . ' = ?2
         ')->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getRightValue() + 1
+            2 => $this->getRight() + 1
         ));
 
         try {
@@ -140,8 +150,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.' . $config->getLevelFieldName() . ' = ?4
         ')->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getLeftValue(),
-            3 => $this->getRightValue(),
+            2 => $this->getLeft(),
+            3 => $this->getRight(),
             4 => $this->getLevel() - 1
         ));
 
@@ -167,7 +177,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.' . $config->getLeftFieldName() . ' = ?2
         ')->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getLeftValue() + 1
+            2 => $this->getLeft() + 1
         ));
 
         try {
@@ -192,7 +202,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
                AND e.' . $config->getRightFieldName() . ' = ?2
         ')->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getRightValue() - 1
+            2 => $this->getRight() - 1
         ));
 
         try {
@@ -229,8 +239,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getLeftValue(),
-            3 => $this->getRightValue()
+            2 => $this->getLeft(),
+            3 => $this->getRight()
         ));
 
         if ($depth !== null && $depth > 0) {
@@ -279,7 +289,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
     public function getNumberOfDescendants($depth = null)
     {
         if ( ! $depth) {
-            return ($this->getRightValue() - $this->getLeftValue() - 1) / 2;
+            return ($this->getRight() - $this->getLeft() - 1) / 2;
         }
 
         $entity = $this->unwrap();
@@ -308,8 +318,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb->setParameters(array(
             1 => $this->getRoot(),
-            2 => $this->getLeftValue(),
-            3 => $this->getRightValue()
+            2 => $this->getLeft(),
+            3 => $this->getRight()
         ));
 
         if ($depth !== null && $depth > 0) {
@@ -340,8 +350,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $entity->setLevel(0);
         $entity->setRoot(null);
-        $entity->setLeftValue(1);
-        $entity->setRightValue(2);
+        $entity->setLeft(1);
+        $entity->setRight(2);
 
         $this->getEntityManager()->persist($entity);
     }
@@ -354,8 +364,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         // Update the current node
         $this->setLevel($node->getLevel() + 1);
         $this->setRoot($node->getRoot());
-        $this->setLeftValue($node->getRightValue());
-        $this->setRightValue($node->getRightValue() + 1);
+        $this->setLeft($node->getRight());
+        $this->setRight($node->getRight() + 1);
 
         $em->persist($this->unwrap());
 
@@ -369,7 +379,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         // Updating ancestors
         foreach ($ancestors as $ancestor) {
-            $ancestor->setRightValue($ancestor->getRightValue() + 2);
+            $ancestor->setRight($ancestor->getRight() + 2);
             $em->persist($ancestor->unwrap());
         }
     }
@@ -382,8 +392,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         // Update the current node
         $this->setLevel($node->getLevel() + 1);
         $this->setRoot($node->getRoot());
-        $this->setLeftValue($node->getLeftValue() - 1);
-        $this->setRightValue($node->getLeftValue());
+        $this->setLeft($node->getLeft() - 1);
+        $this->setRight($node->getLeft());
 
         $em->persist($this->unwrap());
 
@@ -391,13 +401,13 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         $ancestors = $hm->getNodes($node->getAncestors());
 
         // Updating parent node
-        $node->setLeftValue($node->getLeftValue() - 2);
+        $node->setLeft($node->getLeft() - 2);
 
         $em->persist($node->unwrap());
 
         // Updating ancestors
         foreach ($ancestors as $ancestor) {
-            $ancestor->setLeftValue($ancestor->getLeftValue() - 2);
+            $ancestor->setLeft($ancestor->getLeft() - 2);
             $em->persist($ancestor->unwrap());
         }
     }
@@ -433,24 +443,24 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return $this->unwrap()->getId();
     }
 
-    public function getLeftValue()
+    public function getLeft()
     {
-        return $this->unwrap()->getLeftValue();
+        return $this->unwrap()->getLeft();
     }
 
-    public function setLeftValue($value)
+    public function setLeft($value)
     {
-        $this->unwrap()->setLeftValue($value);
+        $this->unwrap()->setLeft($value);
     }
 
-    public function getRightValue()
+    public function getRight()
     {
-        return $this->unwrap()->getRightValue();
+        return $this->unwrap()->getRight();
     }
 
-    public function setRightValue($value)
+    public function setRight($value)
     {
-        $this->unwrap()->setRightValue($value);
+        $this->unwrap()->setRight($value);
     }
 
     public function getLevel()
