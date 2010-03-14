@@ -5,65 +5,37 @@ namespace DoctrineExtensions\Hierarchical\NestedSet;
 interface NestedSetNodeInfo
 {
     /**
-     * Retrieves the Entity identifier
+     * Retrieves the Entity identifier field name
      *
-     * @return mixed
+     * @return string 
      */
-    public function getId();
+    public function getIdFieldName();
 
     /**
-     * Retrieves the Entity Node left value
+     * Retrieves the Entity Node left field name
      *
-     * @return integer Node left value
+     * @return string
      */
-    public function getLeft();
+    public function getLeftFieldName();
 
     /**
-     * Defines the Entity Node left value
+     * Retrieves the Entity Node right field name
      *
-     * @param integer $value Node left value
+     * @return string
      */
-    public function setLeft($value);
+    public function getRightFieldName();
 
     /**
-     * Retrieves the Entity Node right value
+     * Retrieves the Entity Node level field name
      *
-     * @return integer Node right value
+     * @return string
      */
-    public function getRight();
+    public function getLevelFieldName();
 
     /**
-     * Defines the Entity Node right value
+     * Defines the Entity Node Root Node field name
      *
-     * @param integer $value Node right value
+     * @return string
      */
-    public function setRight($value);
-
-    /**
-     * Retrieves the Entity Node level
-     *
-     * @return integer Node level
-     */
-    public function getLevel();
-
-    /**
-     * Defines the Entity Node level
-     *
-     * @param integer $value Node level
-     */
-    public function setLevel($value);
-
-    /**
-     * Defines the Entity Node Root Node
-     *
-     * @param integer $value Node Root Node
-     */
-    public function getRoot();
-
-    /**
-     * Defines the Entity Node Root Node
-     *
-     * @param integer $value Node Root Node
-     */
-    public function setRoot($value);
+    public function getRootFieldName();
 }

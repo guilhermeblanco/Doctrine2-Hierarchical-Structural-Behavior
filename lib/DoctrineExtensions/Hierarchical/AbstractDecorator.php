@@ -5,9 +5,7 @@ namespace DoctrineExtensions\Hierarchical;
 
 class AbstractDecorator
 {
-    protected $_configuration;
-
-    protected $_className;
+    protected $_class;
 
     protected $_entity;
 
@@ -15,7 +13,7 @@ class AbstractDecorator
 
     public function __construct($entity, $hm)
     {
-        $this->_className = get_class($entity);
+        $this->_class = $hm->getEntityManager()->getClassMetadata(get_class($entity));
         $this->_entity = $entity;
         $this->_hm = $hm;
     }
@@ -25,18 +23,9 @@ class AbstractDecorator
         return $this->_entity;
     }
 
-    public function getConfiguration()
+    public function getClassMetadata()
     {
-        if ($this->_configuration === null) {
-            $this->_configuration = $this->_hm->getClassConfiguration($this->_className);
-        }
-
-        return $this->_configuration;
-    }
-
-    public function getClassName()
-    {
-        return $this->_className;
+        return $this->_class;
     }
 
     public function getHierarchicalManager()
@@ -44,15 +33,19 @@ class AbstractDecorator
         return $this->_hm;
     }
 
-    protected function getEntityManager()
-    {
-        return $this->_hm->getEntityManager();
-    }
-
-    protected function getNode($entity)
+    protected function _getNode($entity)
     {
         return $this->_hm->getNode($entity);
     }
 
+    protected function _getValue($fieldName)
+    {
+        return $this->_class->getReflectionProperty($fieldName)->getValue($this->_entity);
+    }
+
+    protected function _setValue($fieldName, $value)
+    {
+        $this->_class->getReflectionProperty($fieldName)->setValue($this->_entity, $value);
+    }
     // ...
 }

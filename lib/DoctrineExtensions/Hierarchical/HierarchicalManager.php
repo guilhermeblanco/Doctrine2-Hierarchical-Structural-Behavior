@@ -15,33 +15,16 @@ use DoctrineExtensions\Hierarchical\AdjacencyList\AdjacencyListNodeInfo,
 
 class HierarchicalManager
 {
-    private $_em;
-
-    private $_classConfiguration;
+    protected $_em;
 
     public function __construct(EntityManager $em)
     {
         $this->_em = $em;
-        $this->_classConfiguration = array();
     }
 
     public function getEntityManager()
     {
         return $this->_em;
-    }
-
-    public function addClassConfiguration($className, Configuration $configuration)
-    {
-        $this->_classConfiguration[$className] = $configuration;
-    }
-
-    public function getClassConfiguration($className)
-    {
-        if ( ! isset($this->_classConfiguration[$className])) {
-            throw HierarchicalException::couldNotFindClassConfiguration($className);
-        }
-
-        return $this->_classConfiguration[$className];
     }
 
     public function getNode($entity)
@@ -80,7 +63,10 @@ class HierarchicalManager
             return $input;
         }
 
-        throw new \InvalidArgumentException(sprintf('Input to getNodes should be a PersistentCollection or a Traversable/array, %s provided', gettype($input)));
+        throw new \InvalidArgumentException(
+            'Input to getNodes should be a PersistentCollection or a ' .
+            'Traversable/array, ' . gettype($input) . ' provided.'
+        );
     }
 
     public function createRoot($entity)

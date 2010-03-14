@@ -7,8 +7,6 @@ interface Node
 {
     public function __construct($entity, $hm);
 
-    public function hasPrevSibling();
-    public function hasNextSibling();
     public function hasChildren();
     public function hasParent();
     public function isRoot();
@@ -17,8 +15,6 @@ interface Node
     public function unwrap();
 
     public function getRootNodes();
-    public function getPrevSibling();
-    public function getNextSibling();
     public function getChildren();
     public function getParent();
     public function getFirstChild();
@@ -31,7 +27,7 @@ interface Node
 
     public function delete();
 
-    public function addChild(Node $node);
+    public function addChild($entity);
     public function createRoot();
 
     public function insertAsLastChildOf(Node $node);
