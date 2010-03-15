@@ -8,10 +8,26 @@ use DoctrineExtensions\Hierarchical\AbstractDecorator,
     Doctrine\ORM\NoResultException;
 
 /**
- * TODO: Isn't there a way to make this thing act as the entity it decorates? so it's easier to pass it along to the EM
- * I don't know a clean ay to achieve it
+ * TODO comment/finish this class
+ *
+ * TODO if you want to return Nodes in getChildren and others,
+ *      we need a custom iterator class that can fetch items from
+ *      the result set and turn them into nodes on the fly, we can
+ *      not just fetch everything at once imo memory wise it's bad,
+ *      and imo it should be optional anyway, or just never do it,
+ *      because when you fetch nodes to display them, you don't care
+ *      about having this decorator around each of them. Also that is
+ *      why I added the HierarchicalManager::getNodes() function, this
+ *      should be up to the user imo.
+ *
+ * TODO all inserts/move methods should read the left/right values
+ *      from the parent from the DB and not the given node, otherwise
+ *      we might have race conditions that break the tree
+ *
+ * TODO getIdFieldName and others should be cached imo, and lazy-loaded
+ *      by _getBaseQueryBuilder if they are not filled in
  */
-class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNodeInfo
+class NestedSetDecorator extends AbstractDecorator implements Node
 {
     protected $_baseQuery;
 
@@ -41,9 +57,14 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return $this->_entity->getLevelFieldName();
     }
 
-    public function getRootFieldName()
+    public function getRootIdFieldName()
     {
-        return $this->_entity->getRootFieldName();
+        return $this->_entity->getRootIdFieldName();
+    }
+
+    public function getParentIdFieldName()
+    {
+        return $this->_entity->getParentIdFieldName();
     }
 
     // End of delegate support of Decorator object
@@ -103,13 +124,13 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return ($rightValue - $leftValue - 1) / 2;
     }
 
-    public function getChildren()
+    public function getChildren($limit = null, $offset = 0, $order = 'ASC')
     {
         if ($this->_children) {
             return $this->_children;
         }
 
-        return $this->getDescendants(1);
+        return $this->_children = $this->getDescendants(1, $limit, $offset, $order);
     }
 
     public function getParent()
@@ -124,11 +145,11 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
-        $andX = $expr->andX()
-            ->add($expr->eq('e.' . $this->getRootFieldName(), $this->_getValue($this->getRootFieldName())))
-            ->add($expr->gt('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())))
-            ->add($expr->lt('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())))
-            ->add($expr->eq('e.' . $this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()) - 1));
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $andX->add($expr->gt('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
+        $andX->add($expr->lt('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())));
+        $andX->add($expr->eq('e.' . $this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()) - 1));
         $qb->where($andX);
 
         $this->_parent = $this->_hm->getNode($qb->getQuery()->getSingleResult());
@@ -136,7 +157,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
         return $this->_parent;
     }
 
-    public function getDescendants($depth = 0)
+    public function getDescendants($depth = 0, $limit = null, $offset = 0, $order = 'ASC')
     {
         if ( ! $this->hasChildren()) {
             return array();
@@ -144,10 +165,10 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
-        $andX = $expr->andX()
-            ->add($expr->eq('e.' . $this->getRootFieldName(), $this->_getValue($this->getRootFieldName())))
-            ->add($expr->gt('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())))
-            ->add($expr->lt('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $andX->add($expr->gt('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())));
+        $andX->add($expr->lt('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
 
         if ($depth > 0) {
             $andX->add($expr->lte(
@@ -155,128 +176,166 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
             ));
         }
 
-        $qb->where($andX)->orderBy('e.' . $this->getLeftFieldName(), 'ASC');
+        $qb->where($andX)->orderBy('e.' . $this->getLeftFieldName(), $order);
 
-        $nodes = array_map(function ($entity) use ($this->_hm) {
-            return $this->_hm->getNode($entity);
-        }, $qb->getQuery()->getResult());
+        $q = $qb->getQuery();
+        if ($limit !== null) {
+            $q->setMaxResults((int) $limit);
+        }
+        if ($offset) {
+            $q->setFirstResult((int) $offset);
+        }
 
-        return $nodes;
+        return $q->getResult();
     }
 
     public function addChild($entity)
     {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
         if ($entity === $this->_entity) {
             throw new \IllegalArgumentException('Node cannot be added as child of itself.');
         }
 
         $newLeft  = $this->_getValue($this->getRightFieldName());
         $newRight = $newLeft + 1;
-        $newRoot  = $this->_getValue($this->getRootFieldName());
+        $newRoot  = $this->_getValue($this->getRootIdFieldName());
 
         $this->_shiftRLValues($newLeft, 0, 2, $newRoot);
 
-        $node = $this->_hm->getNode($entity);
-        $node->_setValue($this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()) + 1);
-        $node->_setValue($this->getLeftFieldName(), $newLeft);
-        $node->_setValue($this->getRightFieldName(), $newRight);
-        $node->_setValue($this->getRootFieldName(), $newRoot);
+        $this->_class->reflFields[$this->getLevelFieldName()]->setValue($entity, $this->_getValue($this->getLevelFieldName()) + 1);
+        $this->_class->reflFields[$this->getLeftFieldName()]->setValue($entity, $newLeft);
+        $this->_class->reflFields[$this->getRightFieldName()]->setValue($entity, $newRight);
+        $this->_class->reflFields[$this->getRootIdFieldName()]->setValue($entity, $newRoot);
+        $this->_class->reflFields[$this->getParentIdFieldName()]->setValue($entity, $this->_getValue($this->getIdFieldName()));
 
         $this->_hm->getEntityManager()->persist($entity);
 
         return $node;
     }
 
-    public function insertAsPrevSiblingOf(Node $node)
+    public function insertAsPrevSiblingOf($entity)
     {
-        if ($node->_entity === $this->_entity) {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
             throw new \IllegalArgumentException('Node cannot be added as sibling of itself.');
         }
 
-        $newLeft  = $this->_getValue($this->getRightFieldName()) + 1;
-        $newRight = $newLeft + 2;
-        $newRoot  = $this->_getValue($this->getRootFieldName());
+        $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity);
+        $newRight = $newLeft + 1;
+        $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity);
+        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
+        if (!$newRoot) {
+            throw new \IllegalArgumentException('You can not add a sibling to a root node');
+        }
 
         $this->_shiftRLValues($newLeft, 0, 2, $newRoot);
 
-        $this->_setValue($this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()));
+        $this->_setValue($this->getLevelFieldName(), $newLevel);
         $this->_setValue($this->getLeftFieldName(), $newLeft);
         $this->_setValue($this->getRightFieldName(), $newRight);
-        $this->_setValue($this->getRootFieldName(), $newRoot);
+        $this->_setValue($this->getRootIdFieldName(), $newRoot);
+        $this->_setValue($this->getParentIdFieldName(), $newParent);
 
         $this->_hm->getEntityManager()->persist($this->_entity);
     }
 
     public function insertAsNextSiblingOf($entity)
     {
-       if ($entity === $this->_entity) {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
             throw new \IllegalArgumentException('Node cannot be added as sibling of itself.');
         }
 
-        $newLeft  = $this->_getValue($this->getLeftFieldName());
+        $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity) + 2;
         $newRight = $newLeft + 1;
-        $newRoot  = $this->_getValue($this->getRootFieldName());
+        $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity);
+        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
+        if (!$newRoot) {
+            throw new \IllegalArgumentException('You can not add a sibling to a root node');
+        }
 
         $this->_shiftRLValues($newLeft, 0, 2, $newRoot);
 
-        $this->_setValue($this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()));
+        $this->_setValue($this->getLevelFieldName(), $newLevel);
         $this->_setValue($this->getLeftFieldName(), $newLeft);
         $this->_setValue($this->getRightFieldName(), $newRight);
-        $this->_setValue($this->getRootFieldName(), $newRoot);
+        $this->_setValue($this->getRootIdFieldName(), $newRoot);
+        $this->_setValue($this->getParentIdFieldName(), $newParent);
 
         $this->_hm->getEntityManager()->persist($this->_entity);
     }
 
-    public function insertAsLastChildOf(Node $node)
+    public function insertAsLastChildOf($entity)
     {
-        if ($node->_entity === $this->_entity) {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
             throw new \IllegalArgumentException('Node cannot be added as child of itself.');
         }
 
-        $newLeft  = $this->_getValue($this->getRightFieldName());
+        $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity);
         $newRight = $newLeft + 1;
-        $newRoot  = $this->_getValue($this->getRootFieldName());
+        $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity) + 1;
+        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
+        if (!$newRoot) {
+            $newRoot = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
+        }
 
         $this->_shiftRLValues($newLeft, 0, 2, $newRoot);
 
-        $this->_setValue($this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()) + 1);
+        $this->_setValue($this->getLevelFieldName(), $newLevel);
         $this->_setValue($this->getLeftFieldName(), $newLeft);
         $this->_setValue($this->getRightFieldName(), $newRight);
-        $this->_setValue($this->getRootFieldName(), $newRoot);
+        $this->_setValue($this->getRootIdFieldName(), $newRoot);
+        $this->_setValue($this->getParentIdFieldName(), $newParent);
 
         $this->_hm->getEntityManager()->persist($this->_entity);
     }
 
-    public function insertAsFirstChildOf(Node $node)
+    public function insertAsFirstChildOf($entity)
     {
-       if ($entity === $this->_entity) {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
             throw new \IllegalArgumentException('Node cannot be added as child of itself.');
         }
 
-        $newLeft  = $this->_getValue($this->getLeftFieldName()) + 1;
-        $newRight = $newLeft + 2;
-        $newRoot  = $this->_getValue($this->getRootFieldName());
+        $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity) + 1;
+        $newRight = $newLeft + 1;
+        $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity) + 1;
+        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
+        if (!$newRoot) {
+            $newRoot = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
+        }
 
         $this->_shiftRLValues($newLeft, 0, 2, $newRoot);
 
-        $this->_setValue($this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()));
+        $this->_setValue($this->getLevelFieldName(), $newLevel);
         $this->_setValue($this->getLeftFieldName(), $newLeft);
         $this->_setValue($this->getRightFieldName(), $newRight);
-        $this->_setValue($this->getRootFieldName(), $newRoot);
+        $this->_setValue($this->getRootIdFieldName(), $newRoot);
+        $this->_setValue($this->getParentIdFieldName(), $newParent);
 
         $this->_hm->getEntityManager()->persist($this->_entity);
     }
 
     public function delete()
     {
-        $oldRoot = $this->_getValue($this->getRootFieldName());
+        $oldRoot = $this->_getValue($this->getRootIdFieldName());
 
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
-        $andX = $expr->andX()
-            ->add($expr->eq('e.' . $this->getRootFieldName(), $this->_getValue($this->getRootFieldName())))
-            ->add($expr->gte('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())))
-            ->add($expr->lte('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $andX->add($expr->gte('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())));
+        $andX->add($expr->lte('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
         $qb->delete()->where($andX);
 
         $qb->getQuery()->execute();
@@ -298,9 +357,9 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
-        $andX = $expr->andX()
-            ->add($expr->eq('e.' . $this->getRootFieldName(), $this->_getValue($this->getRootFieldName())))
-            ->add($expr->eq('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName()) + 1));
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $andX->add($expr->eq('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName()) + 1));
         $qb->where($andX);
 
         return $this->_hm->getNode($qb->getQuery()->getSingleResult());
@@ -318,9 +377,9 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
-        $andX = $expr->andX()
-            ->add($expr->eq('e.' . $this->getRootFieldName(), $this->_getValue($this->getRootFieldName())))
-            ->add($expr->eq('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName()) - 1));
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $andX->add($expr->eq('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName()) - 1));
         $qb->where($andX);
 
         return $this->_hm->getNode($qb->getQuery()->getSingleResult());
@@ -328,20 +387,15 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     protected function _shiftRLValues($first, $last, $delta, $root)
     {
-
+        // TODO implement
     }
 
-
-    /*public function getRootNodes($limit = null, $offset = 0)
+    public function getRootNodes($limit = null, $offset = 0, $order = 'ASC')
     {
-        $hm = $this->getHierarchicalManager();
-        $em = $hm->getEntityManager();
-        $config = $this->getConfiguration();
-
-        $q = $em->createQuery('
-            SELECT e FROM ' . $this->getClassName() . ' e
-             WHERE e.' . $config->getRootFieldName() . ' IS NULL
-        ');
+        $qb = $this->_getBaseQueryBuilder();
+        $qb->where('e.' . $this->getRootIdFieldName() . ' IS NULL');
+        $qb->orderBy('e.' . $this->getLeftFieldName(), $order);
+        $q = $qb->getQuery();
 
         if ($limit !== null) {
             $q->setMaxResults((int) $limit);
@@ -355,33 +409,24 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function getAncestors($depth = null, $limit = null, $offset = 0, $order = 'ASC')
     {
-        $hm = $this->getHierarchicalManager();
-        $em = $hm->getEntityManager();
-        $config = $this->getConfiguration();
-
-        $qb = $em->createQueryBuilder()
-            ->select('e')
-            ->from($this->getClassName(), 'e');
-
-        $expr = $qb->expr();
-        $andX = $expr->andX();
-        $andX->add($expr->eq('e.' . $config->getRootFieldName(), '?1'));
-        $andX->add($expr->lt('e.' . $config->getLeftFieldName(), '?2'));
-        $andX->add($expr->gt('e.' . $config->getRightFieldName(), '?3'));
-
-        $qb->setParameters(array(
-            1 => $this->getRoot(),
-            2 => $this->getLeft(),
-            3 => $this->getRight()
-        ));
-
-        if ($depth !== null && $depth > 0) {
-            $andX->add($expr->lte('e.' . $config->getLevelFieldName(), '?4'));
-            $qb->setParameter(4, $this->getLevel() - $depth);
+        if ( ! $this->hasChildren()) {
+            return array();
         }
 
-        $qb->where($andX);
-        $qb->orderBy('e.' . $config->getLeftFieldName(), $order);
+        $qb = $this->_getBaseQueryBuilder();
+        $expr = $qb->expr();
+        $andX = $expr->andX();
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $andX->add($expr->lt('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())));
+        $andX->add($expr->gt('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
+
+        if ($depth > 0) {
+            $andX->add($expr->lte(
+                'e.' . $this->getLevelFieldName(), $this->_getValue($this->getLevelFieldName()) - $depth
+            ));
+        }
+
+        $qb->where($andX)->orderBy('e.' . $this->getLeftFieldName(), $order);
 
         $q = $qb->getQuery();
         if ($limit !== null) {
@@ -396,33 +441,60 @@ class NestedSetDecorator extends AbstractDecorator implements Node, NestedSetNod
 
     public function createRoot()
     {
-        $entity = $this->unwrap();
-
-        if ($entity->getRoot() !== null) {
+        if ($this->_getValue($this->getRootIdFieldName())) {
             throw new HierarchicalException('This entity is already initialized and can not be made a root node');
         }
 
-        $entity->setLevel(0);
-        $entity->setRoot(null);
-        $entity->setLeft(1);
-        $entity->setRight(2);
+        $this->_setValue($this->getLevelFieldName(), 0);
+        $this->_setValue($this->getLeftFieldName(), 1);
+        $this->_setValue($this->getRightFieldName(), 2);
+        $this->_setValue($this->getRootIdFieldName(), null);
+        $this->_setValue($this->getParentIdFieldName(), null);
 
-        $this->getEntityManager()->persist($entity);
+        $this->_hm->getEntityManager()->persist($this->_entity);
     }
 
-    public function moveAsLastChildOf(Node $node)
+    public function moveAsLastChildOf($entity)
     {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
+            throw new \IllegalArgumentException('Node cannot be added as child of itself.');
+        }
+
+        // TODO implement
     }
 
-    public function moveAsFirstChildOf(Node $node)
+    public function moveAsFirstChildOf($entity)
     {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
+            throw new \IllegalArgumentException('Node cannot be added as child of itself.');
+        }
+
+        // TODO implement
     }
 
-    public function moveAsNextSiblingOf(Node $node)
+    public function moveAsNextSiblingOf($entity)
     {
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
+            throw new \IllegalArgumentException('Node cannot be added as child of itself.');
+        }
+
+        // TODO implement
     }
 
-    public function moveAsPrevSiblingOf(Node $node)
+    public function moveAsPrevSiblingOf($entity)
     {
-    }*/
+        $node = $this->_getNode($entity);
+        $entity = $node->unwrap();
+        if ($entity === $this->_entity) {
+            throw new \IllegalArgumentException('Node cannot be added as child of itself.');
+        }
+
+        // TODO implement
+    }
 }

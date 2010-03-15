@@ -8,7 +8,6 @@ use DoctrineExtensions\Hierarchical\AdjacencyList\AdjacencyListNodeInfo,
     DoctrineExtensions\Hierarchical\MaterializedPath\MaterializedPathDecorator,
     DoctrineExtensions\Hierarchical\NestedSet\NestedSetNodeInfo,
     DoctrineExtensions\Hierarchical\NestedSet\NestedSetDecorator,
-    DoctrineExtensions\Hierarchical\HierarchicalException,
     Doctrine\ORM\EntityManager,
     Doctrine\ORM\PersistentCollection;
 
@@ -29,6 +28,9 @@ class HierarchicalManager
 
     public function getNode($entity)
     {
+        if ($entity instanceof Node) {
+            return $entity;
+        }
         // Not yet implemented
         /*if ($entity instanceof AdjacencyListNodeInfo) {
             return new AdjacencyListDecorator($entity, $this);

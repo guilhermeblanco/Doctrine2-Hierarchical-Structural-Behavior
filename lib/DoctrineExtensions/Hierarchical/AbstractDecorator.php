@@ -40,12 +40,12 @@ class AbstractDecorator
 
     protected function _getValue($fieldName)
     {
-        return $this->_class->getReflectionProperty($fieldName)->getValue($this->_entity);
+        return $this->_class->reflFields[$fieldName]->getValue($this->_entity);
     }
 
     protected function _setValue($fieldName, $value)
     {
-        $this->_class->getReflectionProperty($fieldName)->setValue($this->_entity, $value);
+        $this->_class->reflFields[$fieldName]->setValue($this->_entity, $value);
     }
     // ...
 }

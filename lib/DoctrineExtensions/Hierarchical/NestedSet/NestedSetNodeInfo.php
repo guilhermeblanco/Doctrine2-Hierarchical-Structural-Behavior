@@ -7,35 +7,42 @@ interface NestedSetNodeInfo
     /**
      * Retrieves the Entity identifier field name
      *
-     * @return string 
+     * @return string
      */
     public function getIdFieldName();
 
     /**
-     * Retrieves the Entity Node left field name
+     * Retrieves the Entity left field name
      *
      * @return string
      */
     public function getLeftFieldName();
 
     /**
-     * Retrieves the Entity Node right field name
+     * Retrieves the Entity right field name
      *
      * @return string
      */
     public function getRightFieldName();
 
     /**
-     * Retrieves the Entity Node level field name
+     * Retrieves the Entity level field name
      *
      * @return string
      */
     public function getLevelFieldName();
 
     /**
-     * Defines the Entity Node Root Node field name
+     * Retrieves the Entity root_id field name
      *
      * @return string
      */
-    public function getRootFieldName();
+    public function getRootIdFieldName();
+
+    /**
+     * Retrieves the Entity parent_id field name
+     *
+     * @return string
+     */
+    public function getParentIdFieldName();
 }
