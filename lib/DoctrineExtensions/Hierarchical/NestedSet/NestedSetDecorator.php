@@ -29,8 +29,6 @@ use DoctrineExtensions\Hierarchical\AbstractDecorator,
  */
 class NestedSetDecorator extends AbstractDecorator implements Node
 {
-    protected $_baseQuery;
-
     protected $_parent;
 
     protected $_children;
@@ -71,13 +69,9 @@ class NestedSetDecorator extends AbstractDecorator implements Node
 
     protected function _getBaseQueryBuilder()
     {
-        if ($this->_baseQuery === null) {
-            $this->_baseQuery = $this->_hm->getEntityManager()->createQueryBuilder()
-                ->select('e')
-                ->from($this->_class->name, 'e');
-        }
-
-        return $this->_baseQuery;
+        return $this->_hm->getEntityManager()->createQueryBuilder()
+            ->select('e')
+            ->from($this->_class->name, 'e');
     }
 
     public function hasChildren()
@@ -162,11 +156,11 @@ class NestedSetDecorator extends AbstractDecorator implements Node
         if ( ! $this->hasChildren()) {
             return array();
         }
-
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
         $andX = $expr->andX();
-        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $rootId = $this->_getValue($this->getRootIdFieldName()) ?: $this->_getValue($this->getIdFieldName());
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $rootId));
         $andX->add($expr->gt('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName())));
         $andX->add($expr->lt('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName())));
 
@@ -199,7 +193,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node
 
         $newLeft  = $this->_getValue($this->getRightFieldName());
         $newRight = $newLeft + 1;
-        $newRoot  = $this->_getValue($this->getRootIdFieldName());
+        $newRoot  = $this->_getValue($this->getRootIdFieldName()) ?: $this->_getValue($this->getIdFieldName());
 
         $this->_shiftRLValues($newLeft, 0, 2, $newRoot);
 
@@ -225,7 +219,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node
         $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity);
         $newRight = $newLeft + 1;
         $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity);
-        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newParent = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
         $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
         if (!$newRoot) {
             throw new \IllegalArgumentException('You can not add a sibling to a root node');
@@ -250,10 +244,10 @@ class NestedSetDecorator extends AbstractDecorator implements Node
             throw new \IllegalArgumentException('Node cannot be added as sibling of itself.');
         }
 
-        $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity) + 2;
+        $newLeft = $this->_class->reflFields[$this->getRightFieldName()]->getValue($entity) + 1;
         $newRight = $newLeft + 1;
         $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity);
-        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newParent = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
         $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
         if (!$newRoot) {
             throw new \IllegalArgumentException('You can not add a sibling to a root node');
@@ -278,10 +272,10 @@ class NestedSetDecorator extends AbstractDecorator implements Node
             throw new \IllegalArgumentException('Node cannot be added as child of itself.');
         }
 
-        $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity);
+        $newLeft = $this->_class->reflFields[$this->getRightFieldName()]->getValue($entity);
         $newRight = $newLeft + 1;
         $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity) + 1;
-        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newParent = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
         $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
         if (!$newRoot) {
             $newRoot = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
@@ -309,7 +303,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node
         $newLeft = $this->_class->reflFields[$this->getLeftFieldName()]->getValue($entity) + 1;
         $newRight = $newLeft + 1;
         $newLevel = $this->_class->reflFields[$this->getLevelFieldName()]->getValue($entity) + 1;
-        $newParent = $this->_class->reflFields[$this->getParentIdFieldName()]->getValue($entity);
+        $newParent = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
         $newRoot = $this->_class->reflFields[$this->getRootIdFieldName()]->getValue($entity);
         if (!$newRoot) {
             $newRoot = $this->_class->reflFields[$this->getIdFieldName()]->getValue($entity);
@@ -358,7 +352,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
         $andX = $expr->andX();
-        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $rootId = $this->_getValue($this->getRootIdFieldName()) ?: $this->_getValue($this->getIdFieldName());
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $rootId));
         $andX->add($expr->eq('e.' . $this->getLeftFieldName(), $this->_getValue($this->getLeftFieldName()) + 1));
         $qb->where($andX);
 
@@ -378,7 +373,8 @@ class NestedSetDecorator extends AbstractDecorator implements Node
         $qb = $this->_getBaseQueryBuilder();
         $expr = $qb->expr();
         $andX = $expr->andX();
-        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $this->_getValue($this->getRootIdFieldName())));
+        $rootId = $this->_getValue($this->getRootIdFieldName()) ?: $this->_getValue($this->getIdFieldName());
+        $andX->add($expr->eq('e.' . $this->getRootIdFieldName(), $rootId));
         $andX->add($expr->eq('e.' . $this->getRightFieldName(), $this->_getValue($this->getRightFieldName()) - 1));
         $qb->where($andX);
 
@@ -387,7 +383,66 @@ class NestedSetDecorator extends AbstractDecorator implements Node
 
     protected function _shiftRLValues($first, $last, $delta, $root)
     {
-        // TODO implement
+        $this->updateLeftValues($first, $last, $delta, $root);
+        $this->updateRightValues($first, $last, $delta, $root);
+    }
+
+    protected function updateLeftValues($minLeft, $maxLeft, $delta, $rootId)
+    {
+        $qb = $this->_getBaseQueryBuilder();
+        $expr = $qb->expr();
+        $andX = $expr->andX();
+
+        $orX = $expr->orX();
+        $orX->add($expr->eq('e.' . $this->getIdFieldName(), $rootId));
+        $orX->add($expr->eq('e.' . $this->getRootIdFieldName(), $rootId));
+        $andX->add($orX);
+
+        $andX->add($expr->gte('e.' . $this->getLeftFieldName(), $minLeft));
+        if ($maxLeft != 0) {
+            $andX->add($expr->lte('e.' . $this->getLeftFieldName(), $maxLeft));
+        }
+        $qb->where($andX);
+        $qb->update()->set('e.' . $this->getLeftFieldName(), 'e.' . $this->getLeftFieldName() . ' + ' . $delta);
+        $qb->getQuery()->execute();
+    }
+
+    protected function updateRightValues($minRight, $maxRight, $delta, $rootId)
+    {
+        $qb = $this->_getBaseQueryBuilder();
+        $expr = $qb->expr();
+        $andX = $expr->andX();
+
+        $orX = $expr->orX();
+        $orX->add($expr->eq('e.' . $this->getIdFieldName(), $rootId));
+        $orX->add($expr->eq('e.' . $this->getRootIdFieldName(), $rootId));
+        $andX->add($orX);
+
+        $andX->add($expr->gte('e.' . $this->getRightFieldName(), $minRight));
+        if ($maxRight != 0) {
+            $andX->add($expr->lte('e.' . $this->getRightFieldName(), $maxRight));
+        }
+        $qb->where($andX);
+        $qb->update()->set('e.' . $this->getRightFieldName(), 'e.' . $this->getRightFieldName() . ' + ' . $delta);
+        $qb->getQuery()->execute();
+    }
+
+    protected function updateLevelValues($left, $right, $delta, $rootId)
+    {
+        $qb = $this->_getBaseQueryBuilder();
+        $expr = $qb->expr();
+        $andX = $expr->andX();
+
+        $orX = $expr->orX();
+        $orX->add($expr->eq('e.' . $this->getIdFieldName(), $rootId));
+        $orX->add($expr->eq('e.' . $this->getRootIdFieldName(), $rootId));
+        $andX->add($orX);
+
+        $andX->add($expr->gt('e.' . $this->getLeftFieldName(), $left));
+        $andX->add($expr->lt('e.' . $this->getRightFieldName(), $right));
+        $qb->where($andX);
+        $qb->update()->set('e.' . $this->getLevelFieldName(), 'e.' . $this->getLevelFieldName() . ' + ' . $delta);
+        $qb->getQuery()->execute();
     }
 
     public function getRootNodes($limit = null, $offset = 0, $order = 'ASC')
