@@ -138,7 +138,7 @@ class NestedSetDecorator extends AbstractDecorator implements Node
         }
 
         $qb = $this->_getBaseQueryBuilder();
-        $qb->where($qb->expr()->eq('e.' . $this->getParentIdFieldName(), $this->_getValue($this->getParentIdFieldName())));
+        $qb->where($qb->expr()->eq('e.' . $this->getIdFieldName(), $this->_getValue($this->getParentIdFieldName())));
 
         $this->_parent = $this->_hm->getNode($qb->getQuery()->getSingleResult());
 
